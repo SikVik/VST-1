@@ -35,6 +35,8 @@ juce_add_plugin(RadioSauceSynth
     FORMATS VST3
     PRODUCT_NAME "RadioSauceSynth")
 
+    juce_generate_juce_header(RadioSauceSynth)
+
 target_sources(RadioSauceSynth PRIVATE
     ${PROJECT_SOURCE_DIR}/Source/PluginProcessor.cpp
     ${PROJECT_SOURCE_DIR}/Source/PluginEditor.cpp
