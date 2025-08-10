@@ -1,0 +1,45 @@
+name: Build RadioSauceSynth
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup CMake
+        uses: lukka/get-cmake@v3.30.4
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: RadioSauceSynth-Windows-VST3
+          path: |
+            build/**/Release/VST3/*.vst3
+            build/**/Release/*.vst3
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup CMake
+        run: brew install cmake || true
+      - name: Configure
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release -- -quiet
+      - name: Codesign (adhoc, optional)
+        run: |
+          find build -name "*.vst3" -print0 | xargs -0 -I {} codesign --force -s - --timestamp {} || true
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: RadioSauceSynth-macOS-VST3
+          path: |
+            build/**/VST3/*.vst3
+            build/**/*.vst3
