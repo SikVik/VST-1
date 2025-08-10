@@ -38,11 +38,8 @@ juce_add_plugin(RadioSauceSynth
 target_sources(RadioSauceSynth PRIVATE
     ${PROJECT_SOURCE_DIR}/Source/PluginProcessor.cpp
     ${PROJECT_SOURCE_DIR}/Source/PluginEditor.cpp
-    ${PROJECT_SOURCE_DIR}/Source/SynthVoice.cpp
-    ${PROJECT_SOURCE_DIR}/Source/SynthSound.cpp
-    ${PROJECT_SOURCE_DIR}/Source/Wavetable.cpp
-    ${PROJECT_SOURCE_DIR}/Source/FXChain.cpp
 )
+
 
 target_include_directories(RadioSauceSynth PRIVATE ${PROJECT_SOURCE_DIR}/Source)
 
