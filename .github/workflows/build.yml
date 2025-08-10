@@ -1,20 +1,20 @@
-name: Build RadioSauceSynth
-
-on:
-  push:
-  workflow_dispatch:
-
-jobs:
   build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install CMake
         uses: lukka/get-cmake@v3.30.4
+
+      - name: Clean build dir
+        run: if exist build rmdir /s /q build
+
       - name: Configure (CMake)
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -S . -G "Visual Studio 17 2022" -A x64
+
       - name: Build
         run: cmake --build build --config Release
+
       - name: Upload VST3
         uses: actions/upload-artifact@v4
         with:
@@ -22,24 +22,3 @@ jobs:
           path: |
             build/**/Release/VST3/*.vst3
             build/**/Release/*.vst3
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install CMake
-        run: brew install cmake || true
-      - name: Configure (CMake)
-        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --config Release -- -quiet
-      - name: (Optional) Ad-hoc codesign
-        run: |
-          find build -name "*.vst3" -print0 | xargs -0 -I {} codesign --force -s - --timestamp {} || true
-      - name: Upload VST3
-        uses: actions/upload-artifact@v4
-        with:
-          name: RadioSauceSynth-macOS-VST3
-          path: |
-            build/**/VST3/*.vst3
-            build/**/*.vst3
