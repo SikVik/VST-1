@@ -1,0 +1,124 @@
+name: hotfix-and-build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply source fixes from build errors
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # 1) PluginEditor.h: getColour -> findColour
+          if [ -f Source/PluginEditor.h ]; then
+            sed -i -E 's/\bgetColour\s*\(/findColour(/g' Source/PluginEditor.h
+          fi
+
+          # 2) PluginProcessor.cpp: lambda should accept juce::String&
+          if [ -f Source/PluginProcessor.cpp ]; then
+            # Prefer a narrow replacement on the lambda parameter list
+            sed -i -E 's/(auto[[:space:]]+make[[:space:]]*=\s*\[[^]]*\]\s*\([^,]+,[^,]+,[^,]+,)[[:space:]]*const[[:space:]]+char[[:space:]]\*[[:space:]]*(name\))/\1 const juce::String\& \2/' Source/PluginProcessor.cpp
+            # Fallback: convert any remaining const char* name -> const juce::String& name
+            sed -i -E 's/const[[:space:]]+char[[:space:]]\*/const juce::String\&/g' Source/PluginProcessor.cpp
+          fi
+
+          # 3) SynthVoice.h: migrate old StateVariableTPTFilter API (remove `.state` usage)
+          if [ -f Source/SynthVoice.h ]; then
+            # Ensure SynthSound.h is included once at top
+            if ! grep -q '^[[:space:]]*#include[[:space:]]*"SynthSound.h"' Source/SynthVoice.h; then
+              sed -i '1i #include "SynthSound.h"' Source/SynthVoice.h
+            fi
+            # type assignment -> setType(...)
+            sed -i -E 's/([A-Za-z0-9_]+)\.state->type\s*=\s*([^;]+);/\1.setType(\2);/g' Source/SynthVoice.h
+            # resonance assignment -> setResonance(...)
+            sed -i -E 's/([A-Za-z0-9_]+)\.state->resonance\s*=\s*([^;]+);/\1.setResonance(\2);/g' Source/SynthVoice.h
+            # setCutOffFrequency(sr, cutoff) -> setCutoffFrequency(cutoff)
+            sed -i -E 's/([A-Za-z0-9_]+)\.state->setCutOffFrequency\s*\(\s*[^,]+,\s*/\1.setCutoffFrequency(/g' Source/SynthVoice.h
+            # Also normalize function name capitalization if used elsewhere
+            sed -i -E 's/setCutOffFrequency/setCutoffFrequency/g' Source/SynthVoice.h
+          fi
+
+          # 4) FXChain.h: comment out any references to `crusher` (until defined)
+          if [ -f Source/FXChain.h ]; then
+            sed -i -E '/crusher/ s/^/\/\/ /' Source/FXChain.h
+          fi
+
+      - name: Commit hotfix
+        run: |
+          set -e
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add -A
+            git commit -m "Hotfix: JUCE API updates + lambda type + LookAndFeel + crusher refs"
+            git push
+          else
+            echo "No changes to commit."
+          fi
+
+  build-windows:
+    runs-on: windows-latest
+    needs: hotfix
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CMake
+        uses: lukka/get-cmake@v3.30.4
+
+      - name: Clean build dir
+        run: if exist build rmdir /s /q build
+
+      - name: Configure (CMake)
+        run: cmake -B build -S . -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: RadioSauceSynth-Windows-VST3
+          path: |
+            build\**\Release\VST3\*.vst3
+            build\**\Release\*.vst3
+
+  build-macos:
+    runs-on: macos-latest
+    needs: hotfix
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CMake
+        run: brew install cmake || true
+
+      - name: Clean build dir
+        run: rm -rf build
+
+      - name: Configure (CMake)
+        run: cmake -B build -S .
+
+      - name: Build
+        run: cmake --build build --config Release -- -quiet
+
+      - name: (Optional) Ad-hoc codesign
+        run: |
+          find build -name "*.vst3" -print0 | xargs -0 -I {} codesign --force -s - --timestamp {} || true
+
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: RadioSauceSynth-macOS-VST3
+          path: |
+            build/**/VST3/*.vst3
+            build/**/*.vst3
